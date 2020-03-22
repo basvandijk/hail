@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Main where
 
-import Control.Monad (when)
+import Control.Monad (when, unless)
 import Control.Applicative ((<*>))
 import Control.Concurrent (threadDelay)
 import Data.Semigroup ((<>))
@@ -27,6 +27,8 @@ data Opts = Opts
   , netrcFile :: Maybe FilePath -- ^ The netrc file for hydra access.
   , pollPeriod :: Maybe Int     -- ^ The period to poll the job, in
                                 -- minutes, or 'Nothing' for a oneshot.
+  , noInitialActivate :: Bool   -- ^ Whether to disable the initial
+                                -- activation of the profile.
   }
 
 -- | Parser for the poll period command line flag
@@ -62,6 +64,10 @@ optsParser =  Opts
              <> metavar "NETRC_FILE"
              <> help "The netrc file for hydra HTTP access"))
           <*> (oneshotParser <|> pollPeriodParser)
+          <*> switch
+              ( long "no-initial-activate"
+             <> help "Disable the initial activation of the profile"
+              )
 
 -- | Full command line parser with usage string.
 optsParserInfo :: ParserInfo Opts
@@ -77,8 +83,9 @@ main = do
       uri = jobURI opts
   m_creds <- loadCredsFromNetrc (netrcFile opts) uri
   createDirectoryIfMissing True $ takeDirectory profilePath
-  -- Try to activate on initial startup, but ignore failures.
-  activate profilePath ActivateIgnoreErrors
+  unless (noInitialActivate opts) $
+    -- Try to activate on initial startup, but ignore failures.
+    activate profilePath ActivateIgnoreErrors
   let cont = case pollPeriod opts of
         Nothing -> const $ return ()
         Just period -> \delay -> do
